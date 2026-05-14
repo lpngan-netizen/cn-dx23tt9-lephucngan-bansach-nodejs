@@ -1,0 +1,82 @@
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #f5f5f5;
+}
+
+/* Banner */
+.hero img {
+  width: 100%;
+  height: auto;
+}
+
+/* Container giống Fahasa */
+.container {
+  max-width: 1200px;
+  margin: auto;
+}
+
+/* Category */
+.category {
+  display: flex;
+  overflow-x: auto;
+  padding: 15px 0;
+}
+
+.category button {
+  margin-right: 10px;
+  padding: 8px 16px;
+  border: none;
+  background: #eee;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.category .active {
+  background: #e53935;
+  color: #fff;
+}
+
+/* Grid sản phẩm chuẩn Fahasa */
+.products {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 15px;
+  padding-bottom: 30px;
+}
+
+/* Card */
+.product-card {
+  background: #fff;
+  padding: 10px;
+  border-radius: 10px;
+  transition: 0.3s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+}
+
+.product-card img {
+  width: 100%;
+}
+
+.price {
+  color: #e53935;
+  font-weight: bold;
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .products {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .products {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
