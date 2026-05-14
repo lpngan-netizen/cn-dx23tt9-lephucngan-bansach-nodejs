@@ -1,0 +1,59 @@
+<script>
+$(document).ready(() => {
+    $('#addnew').click(() => {
+        window.location = '/admin/category?id=0';
+    })
+
+    $('.delete').click(function(e) {
+        let item = $(e.target);
+
+        if (confirm('Bạn muốn xóa ' + item.attr('item_name') + '?')) {
+            $('#loading').show();
+            savedata('/be/delete-category.php', {id: item.attr('item_id')}).then((result) => {
+                if (result.status == 'ok') {
+                    item.parents('tr').remove();
+                }
+                else {
+                    alert('Lỗi. Không thể xóa');
+                }
+
+                $('#loading').hide();
+            })
+        }
+    })
+
+    $('#cancel').click(() => {
+        if (confirm('Bạn muốn đóng form và không lưu dữ liệu')) {
+            window.location = '/admin/category';
+        }
+    })
+
+    $('#save').click(async () => {
+        let data = {};
+        
+        $('#formdata').find('input, textarea, select, hidden').each(function(i, e) {
+            dom = $(e);
+            data[dom.attr('name')] = dom.val();
+        });
+
+        $('#loading').show();
+
+        await savedata('/be/save-category.php', data).then((result) => {
+            if (result.status == 'ok') {
+                if (result.insert_id != undefined) {
+                    $('#formdata [name=id]').val(result.insert_id);
+                }
+
+                if (confirm('Bạn muốn trở lại màn hinh danh sách?')) {
+                    window.location.href = '/admin/category';
+                }
+            }
+            else {
+                alert('Lỗi. Không thể lưu dữ liệu');
+            }
+        })
+
+        $('#loading').hide();
+    })
+})
+</script>

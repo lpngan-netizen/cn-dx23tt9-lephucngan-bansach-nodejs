@@ -1,0 +1,352 @@
+<div id="page-content">
+    <div id="chart-board">
+        <div class="flex" style="width: 100%;">
+            <div class="chart" id="chart-income" style="flex-grow: 1;">
+                <div class="body">
+                    <div class="head">
+                        <div class="label">Doanh thu</div>
+                        <div class="functions">
+                            <div id="monthlist">Tháng: </div>
+                            <div>Năm: <select id="year"></select></div>
+                            <div>Biến động: <select id="mix">
+                                <option value="1">Tích lũy</option>
+                                <option value="2">Theo ngày</option>
+                            </select></div>
+                        </div>
+                    </div>
+                    <canvas id="chart-income-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .chart .head .label {
+        text-align: center;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .chart .head .functions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+    #monthlist span {
+        font-size: 1em;
+        line-height: 1.5;
+        display: inline-block;
+        padding: 4px 10px;
+        margin: 0 10px;
+        cursor: pointer;
+    }
+
+    #monthlist span.yes {
+        color: #4696e6;
+    }
+
+    #monthlist span.selected {
+        font-weight: bold;
+        color: #005fbe;
+    }
+    
+    #monthlist span.no {
+        color: #dcdcdc;
+    }
+</style>
+
+<script>
+    {
+        let the_chart;
+        let chart_data = [], processed_data = [];
+        let year_list = [], month_list = [];
+        let first_load = true;
+
+        let color = [
+            ['#ff9159', '#facbb3'],
+            ['#00f06e', '#76eeae'],
+            ['#feff5b', '#f8f8a7'],
+            ['#9257e5', '#997bc3'],
+            ['#d268d5', '#f1a2f3'],
+            ['#1aadab', '#7fd3d2'],
+            ['#9257e5', '#997bc3'],
+            ['#9257e5', '#997bc3'],
+            ['#9257e5', '#997bc3']
+        ];
+
+        const legend_margin = {
+            id: 'legend_margin',
+            beforeInit(chart, legend, fit) {
+                const fit_value = chart.legend.fit;
+                chart.legend.fit = function fit() {
+                    fit_value.bind(chart.legend)();
+                    return this.height += 30;
+                }
+            }
+        }
+        
+        function init_chart_income_control() {
+            let month_ctrl = $('#chart-income #monthlist');
+
+            for (let i=1; i <= 12; i++) {
+                month_ctrl.append(`<span>${ i }</span`);
+            }
+
+            let year_ctrl = $('#chart-income #year');
+
+            year_list.forEach(e => {
+                year_ctrl.append(`<option value="${ e }">${ e }</option>`);
+            })
+            //-------------------------------------
+
+            $('#chart-income #year').change(function() {
+                let year = $(this).val();
+                let months = month_list[year];
+                let monthlist = $('#chart-income #monthlist');
+
+                for (let i = 0; i < 12; i++) {
+                    if (months.find(e => e == i+1)) {
+                        monthlist.find('span:eq('+i+')').attr('class', 'yes');
+                    }
+                    else {
+                        monthlist.find('span:eq('+i+')').attr('class', 'no');
+                    }
+                }
+                
+                if (first_load) {
+                    let today = new Date();
+                    let current_month = today.getMonth();
+                    let ctrl = $('#chart-income #monthlist span:eq('+current_month+')');
+                    
+                    if (ctrl.hasClass('yes') && year == today.getFullYear()) {
+                        ctrl.click();
+                    }
+                    else {
+                        $('#chart-income #monthlist span.yes:last').click();
+                    }
+
+                    first_load = false;
+                }
+                else {
+                    $('#chart-income #monthlist span.yes:first').click();
+                }
+            })
+
+            $('#chart-income #monthlist span').click(function() {
+                let ctrl = $(this);
+                if (ctrl.hasClass('yes')) {
+                    $('#chart-income #monthlist span.selected').removeClass('selected');
+                    ctrl.addClass('selected');
+                    refresh_chart_income_progress(ctrl.text());
+                }
+            });
+            
+        }
+
+        function init_chart_income_process() {
+            return new Chart("chart-income-canvas", {
+                type: "line",
+                plugins: [legend_margin],
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    aspectRatio: screen.width <= 768? (screen.width <= 450? 1: 16/8): 20/8,
+                    scales: {
+                        y: {
+                            stacked: true,
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        datalabels: {
+                            anchor :'end',
+                            align : 'top',
+                            backgroundColor: 'white'
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    layout: {
+                        padding: {top: 10}
+                    }
+                }
+            });
+        }
+
+        function refresh_chart_income_progress(month=1) {
+            let year = $('#chart-income #year').val();
+            let ismix = $('#chart-income #mix').val();
+            let month_last_day = last_day_of_month(month, year);
+
+            the_chart.data.datasets = processed_data['total'][ismix][year][month].dataset;
+            the_chart.data.labels = processed_data['total'][ismix][year][month].labels;
+            the_chart.update();
+            console.log(processed_data);
+        }
+        
+        $(document).ready(function() {
+            let process = [];
+            
+            process.push(getdata('/be/chart-income.php').then(result => {
+                result.process_name = 'chart-income';
+                return result;
+            }));
+            
+            Promise.all(process).then(results => {
+                if (results.find(e => e.status != 'ok')) {
+                    alert('Không thể lấy được dữ liệu báo cáo');
+                    return;
+                }
+                //------------------------------------------------------------------
+
+                let result_income = results.find(e => e.process_name == 'chart-income');
+
+                if (result_income.status == 'ok') {
+                    let years = [], months = [], legends = [];
+                    
+                    result_income.data.forEach(element => {
+                        legends.push('Doanh thu');
+                        years.push(element.year);
+                        if (months[element.year] == undefined) months[element.year] = [];
+                        months[element.year].push(element.month);
+                    });
+                    
+                    year_list = unique_array(years);
+                    year_list.sort((a, b) => a - b);
+
+                    months.forEach((y, i) => {
+                        month_list[i] = unique_array(y);
+                    });
+                    
+                    legends = unique_array(legends);
+                    //-----------------------------------------------
+                    
+                    let type_list = ['total'];
+
+                    type_list.forEach(type => {
+                        let raw_data = [...result_income.data];
+                        let accumulate = [];
+
+                        legends.forEach((name, i) => {
+                            accumulate[name] = 0;
+                        });
+                        
+                        //#region generate data Tich luy
+                        processed_data[type] = [];
+                        processed_data[type][1] = [];
+
+                        year_list.forEach(y => {
+                            processed_data[type][1][y] = [];
+
+                            for (let m = 1; m <= 12; m++) {
+                                processed_data[type][1][y][m] = {dataset: [], labels: []};
+                                legends.forEach((name, i) => processed_data[type][1][y][m].dataset.push({label: name, data: [], stack: i}));
+                                let month_last_day = last_day_of_month(m, y);
+
+                                processed_data[type][1][y][m].dataset.forEach((ds, i) => {
+                                    for (let d = 0; d <= month_last_day; d++) {
+                                        let value = 0;
+                                        
+                                        if (raw_data) {
+                                            let len = raw_data.length;
+                                            for (let k = 0; k < len; k++) {
+                                                let raw = raw_data[k];
+                                                
+                                                if (raw.day == d && raw.month == m && raw.year == y) {
+                                                    accumulate[ds.label] += +raw[type];
+                                                    //raw_data.splice(k, 1);
+                                                    break;
+                                                }
+                                            }
+
+                                            value = accumulate[ds.label];
+                                        }
+                                        
+                                        ds.data.push(value);
+                                    }
+                                    
+                                    ds.backgroundColor = color[i][0];
+                                    ds.borderColor = color[i][1];
+                                })
+
+                                for (let d = 0; d <= month_last_day; d++) {
+                                    processed_data[type][1][y][m].labels.push(d);
+                                }
+                            }
+                        })
+                        //#endregion
+
+                        //#region generate data Theo ngay
+                        raw_data = [...result_income.data];
+                        processed_data[type][2] = [];
+
+                        year_list.forEach(y => {
+                            processed_data[type][2][y] = [];
+
+                            for (let m = 1; m <= 12; m++) {
+                                processed_data[type][2][y][m] = {dataset: [], labels: []};
+                                legends.forEach((name, i) => processed_data[type][2][y][m].dataset.push({label: name, data: [], stack: i}));
+                                let month_last_day = last_day_of_month(m, y);
+
+                                processed_data[type][2][y][m].dataset.forEach((ds, i) => {
+                                    for (let d = 1; d <= month_last_day; d++) {
+                                        let value = 0;
+                                        
+                                        if (raw_data) {
+                                            let len = raw_data.length;
+                                            for (let k = 0; k < len; k++) {
+                                                let raw = raw_data[k];
+                                                if (raw.day == d && raw.month == m && raw.year == y) {
+                                                    value = +raw[type];
+                                                    raw_data.splice(k, 1);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        
+                                        ds.data.push(value);
+                                    }
+
+                                    ds.backgroundColor = color[i][0];
+                                    ds.borderColor = color[i][1];
+                                })
+
+                                for (let d = 1; d <= month_last_day; d++) {
+                                    processed_data[type][2][y][m].labels.push(d);
+                                }
+                            }
+                        })
+                        //#endregion
+                    })
+                }
+                //------------------------------------------------------------------
+                
+                init_chart_income_control();
+                the_chart = init_chart_income_process();
+                //------------------------------------------------------------------
+                
+                let today = new Date();
+                let current_year = today.getFullYear();
+                let year_ctrl = $('#chart-income #year');
+                
+                if (year_ctrl.find('option[value='+current_year+']').length > 0) {
+                    year_ctrl.val(current_year).change();
+                }
+                else {
+                    year_ctrl.val(year_list[year_list.length - 1]).change();
+                }
+            })
+        })
+
+        $('#chart-income #mix').change(function() {
+            $('#chart-income #monthlist span.selected').click();
+        })
+    }
+</script>

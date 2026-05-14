@@ -1,0 +1,71 @@
+<script>
+    async function search() {
+        let text = $('.search-bar .text').val();
+        if (text != '') {
+            getdata('/be/search-book.php', {search: text}).then(result => {
+                clear_book();
+                let search_return = '';
+
+                if (result.status == 'ok') {
+                    let list = [];
+
+                    result.data.forEach(e => {
+                        list.push(`<div class="book">
+                            <a class="book-wrapper" href="/books/`+e.url+`">
+                                <div class="image"><img src="`+e.img+`"></div>
+                                <h4 class="title">`+e.name+`</h4>
+                            </a>
+                        </div>`);
+                    })
+
+                    search_return = list.join('');
+                }
+                else {
+                    search_return = 'Không có sách';
+                }
+
+                $('.book-container').append(search_return);
+            });
+        }
+    };
+
+    function clear_book() {
+        $('.book-container').empty();
+    }
+
+    function addcart(id, quantity) {
+        savedata('/be/addcart.php', {id: id, quantity: quantity}).then(result => {
+            if (result.status == 'ok') {
+                alert('Đã thêm vào giỏ hàng');
+                $('#cart-count').text('(' + result.number + ')');
+            }
+            else {
+                alert('Không thể thêm vào giỏ hàng. Bạn vui lòng thử lại sau');
+            }
+        });
+    }
+
+    $(document).ready(() => {
+        $('.search-bar .clear').click(() => {
+            let input = $('.search-bar input');
+            input.val('');
+            input.focus();
+            clear_book();
+        });
+
+        $('.search-bar .search').click(() => {
+            search();
+        });
+
+        $('#buy').click(function() {
+            let id = $(this).attr('itemid');
+            addcart(id, 1);
+        })
+    })
+
+    $(document).keyup(function(e) {
+        if (e.keyCode === 13) {
+            $('.search-bar .search').click();
+        }
+    })
+</script>

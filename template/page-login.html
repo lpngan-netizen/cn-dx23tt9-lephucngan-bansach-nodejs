@@ -1,0 +1,49 @@
+<div id="login-form">
+    <div class="form-row">
+        <label>Tên</label>
+        <div><input type="text" name="username"></div>
+    </div>
+    <div class="form-row">
+        <label>Mật khẩu</label>
+        <div><input type="password" name="password"></div>
+    </div>
+    <div class="form-row"><div id="login-button">Đăng nhập</div></div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $(document).keyup(function(e) {
+            if (e.keyCode === 13) {
+                $('#login-form #login-button').click();
+            }
+        })
+    })
+
+    $('#login-form #login-button').click(() => {
+        let frm = $('#login-form');
+        let usr = encodeURIComponent(frm.find('[name=username]').val());
+        let pwd = encodeURIComponent(frm.find('[name=password]').val());
+
+        if (usr == '') {
+            alert('Chưa nhập tên');
+            return;
+        }
+
+        if (pwd == '') {
+            alert('Chưa nhập mật khẩu');
+            return;
+        }
+
+        $('#loading').show();
+        
+        login(usr, pwd).then(result => {
+            if (result.status == 'success') {
+                location.reload();
+            }
+            else {
+                alert('Không thể đăng nhập. Lỗi ' + result.message);
+                $('#loading').hide();
+            }
+        })
+    })
+</script>

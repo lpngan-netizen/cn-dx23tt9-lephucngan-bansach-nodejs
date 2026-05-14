@@ -1,0 +1,105 @@
+<script>
+function calculate_total() {
+    let total = 0;
+
+    $('#book-list input').each(function() {
+        let data = $(this).data();
+        total += data.total;
+    });
+
+    $('#book-list #total span').text(format_number(total));
+}
+
+$(document).ready(() => {
+    if ($('#book-list tbody tr').length > 0) $('#book-list #summary').show();
+
+    $('#book-list input').change(function(e) {
+        let input = $(e.target);
+        let data = input.data();
+        let val = input.val();
+
+        if (!(val > 0)) {
+            val = data.quantity;
+            input.val(val);
+            return;
+        }
+
+        $('#loading').show();
+
+        savedata('/be/save-cart-detail.php', {id: data.id, quantity: val}).then(result => {
+            if (result.status === 'ok') {
+                data.total = data.price * val;
+                input.attr('data-quantity', val);
+                input.attr('data-total', data.total);
+                input.parents('tr').find('[name=total]').text(format_number(data.total));
+                calculate_total();
+            }
+
+            $('#loading').hide();
+        })
+    });
+
+    $('#book-list .delete').click(function() {
+        let name = $(this).attr('item_name');
+
+        if (confirm('Bạn muốn xóa sách '+name+' ra khỏi đơn hàng?')) {
+            let id = $(this).attr('item_id');
+
+            savedata('/be/delete-cart-detail.php', {id: id}).then(result => {
+                if (result.status == 'ok') {
+                    $(this).parents('tr').remove();
+
+                    if ($('#book-list tbody tr').length > 0) {
+                        calculate_total();
+                        $('#cart-count').text('('+$('#book-list tbody tr').length+')');
+                    }
+                    else {
+                        $('#book-list').text('Không có đơn hàng');
+                        $('#cart-count').text('');
+                    }
+                }
+            })
+        }
+    });
+
+    $('#order-button').click(() => {
+        if ($('#book-list tbody tr').length == 0) {
+            alert('Chưa có hàng trong giỏ hàng');
+            return;
+        }
+
+        let frm = $('#ordering #order-info');
+        let data = {
+            customer: frm.find('[name=name]').val(),
+            phone: frm.find('[name=phone]').val(),
+            address: frm.find('[name=address]').val()
+        };
+
+        if (data.customer == '') {
+            alert('Chưa nhập Họ tên');
+            frm.find('[name=name]').focus();
+            return;
+        }
+
+        if (data.phone == '') {
+            alert('Chưa nhập số Điện thoại');
+            frm.find('[name=phone]').focus();
+            return;
+        }
+
+        if (data.address == '') {
+            alert('Chưa nhập Địa chỉ');
+            frm.find('[name=address]').focus();
+            return;
+        }
+
+        savedata('/be/save-cart.php', data).then(result => {
+            console.log(result);
+            if (result.status == 'ok') {
+                alert('Cảm ơn bạn đã đặt hàng.\nSố đơn hàng của bạn là ' + result.orderid.toString().padStart(5, '0') + '.\n(Dùng số đơn hàng và số điện thoại của bạn để tra cứu thông tin đơn hàng)');
+                window.location.reload();
+            }
+        })
+    })
+})
+</script>

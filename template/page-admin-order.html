@@ -1,0 +1,260 @@
+<script>
+let date_format = 'dd/mm/yy';
+let detail_data = [], book_data = [];
+
+async function get_detail(orderid) {
+    return new Promise(resolve => {
+        fetch('/be/order-detail.php?' + new URLSearchParams({
+            id: orderid
+        }))
+        .then(response => response.json())
+        .then(result => {
+            resolve(result);
+        })
+        .catch((error) => {
+            resolve(error);
+        });
+    })
+};
+
+async function get_book() {
+    return new Promise(resolve => {
+        fetch('/be/book.php?')
+        .then(response => response.json())
+        .then(result => {
+            resolve(result);
+        })
+        .catch((error) => {
+            resolve(error);
+        });
+    })
+};
+
+function create_detail(data) {
+    let new_detail = $(`<tr bookid="` + data.relate_book.id + `">
+        <td>` + data.relate_book.name + `</td>
+        <td align='right'>` + format_number(data.relate_book.price) + `</td>
+        <td align='center'><input type='number' min='1' value='`+data.quantity+`' style="text-align:right; width: 80px;"></td>
+        <td align='right' class='total'>` + format_number(data.total) + `</td>
+        <td align='right'><a href='#' class='delete-detail'>Xóa</a></td>
+    </tr>`);
+
+    new_detail.data = data;
+
+    new_detail.find('input').change(function(e) {
+        let input = $(e.target);
+        let val = input.val();
+
+        if (!(val > 0)) {
+            val = 1;
+            input.val(1);
+        }
+
+        data.quantity = val;
+        data.total = data.price * val;
+        new_detail.find('.total').text(format_number(data.total));
+        calculate_total();
+    });
+
+    new_detail.find('.delete-detail').click(() => {
+        if (confirm('Bạn muốn xóa ' + data.relate_book.name)) {
+            $('#select-book #book-list [bookid='+data.relate_book.id+']').show();
+            let found = detail_data.findIndex(e => e.book_id == data.book_id);
+
+            if (found >= 0) {
+                if (data.id == undefined) {
+                    detail_data.splice(found, 1);
+                }
+                else {
+                    data.deleted = true;
+                }
+            }
+            
+            new_detail.remove();            
+            calculate_total();
+        }
+    });
+
+    return new_detail;
+};
+
+function calculate_total() {
+    let total = 0;
+    detail_data.forEach(e => {
+        if (e.deleted == undefined) total += +e.total;
+    });
+    $('#formdata [name=total]').val(total);
+}
+
+function create_select_book(data) {
+    let new_book = $(`<div class='item' bookid="`+data.id+`">`+data.name+`</div>`);
+    if ($('#formdetail .datatable tbody tr[bookid='+data.id+']').length > 0) new_book.hide();
+
+    new_book.click(() => {
+        let found = detail_data.find(e => e.book_id == data.id);
+        
+        if (found == undefined) {
+            new_detail = {
+                price: data.price,
+                quantity: 1,
+                total: data.price,
+                book_id: data.id,
+                relate_book: data
+            };
+
+            let orderid = $('#formdata [name=id]').val();
+            if (orderid > 0) new_detail.order_id = orderid;
+            detail_data.push(new_detail);
+        }
+        else {
+            new_detail = found;
+            delete new_detail.deleted;
+        }
+        
+        $('#formdetail .datatable tbody').append(create_detail(new_detail));
+        new_book.hide();
+        calculate_total();
+    })
+
+    return new_book;
+}
+
+async function save_detail() {
+    return new Promise(resolve => {
+        let process = [];
+        let orderid = $('#formdata [name=id]').val();
+        let maxlen = detail_data.length - 1;
+
+        for (let i = maxlen; i >= 0; i--) {
+            let e = detail_data[i];
+
+            if (e.deleted === true) {
+                process.push(savedata('/be/delete-order-detail.php', {id: e.id}).then(result => {
+                    if (result.status == 'ok') detail_data.splice(i, 1);
+                }));
+            }
+            else {
+                let data = Object.assign({}, e);
+                delete data.relate_book;
+                process.push(savedata('/be/save-order-detail.php', data).then(result => {
+                    if (result.insert_id != undefined) e.id = result.insert_id;
+                }));
+            }
+        }
+
+        Promise.all(process).then(() => resolve(true));
+    });
+}
+
+$(document).ready(() => {
+    let preload = [];
+    let orderid = $('#formdata [name=id]').val();
+
+    if (orderid > 0) preload.push(get_detail(orderid).then((result) => {
+        detail_data = result.data;
+    }));
+
+    preload.push(get_book().then((result) => {
+        book_data = result.data;
+    }));
+
+    Promise.all(preload).then(() => {
+        detail_data.forEach((item) => {
+            item.relate_book = book_data.find((e) => e.id == item.book_id);
+        });
+
+        let detail_container = $('#formdetail .datatable tbody');
+        detail_data.forEach((item) => {
+            detail_container.append(create_detail(item));
+        });
+
+        let book_container = 
+        book_data.forEach(e => {
+            $('#select-book #book-list').append(create_select_book(e));
+        });
+    })
+
+    $('.datepicker').datepicker({
+        dateFormat: date_format,
+        changeMonth: true,
+        changeYear: true
+    });
+
+    $('.datepicker').change(function() {
+        let date = $(this).val();
+        
+        try {
+            let d = $.datepicker.parseDate(date_format.toLowerCase(), date);
+            $(this).val($.datepicker.formatDate(date_format.toLowerCase(), d));
+        } catch( error ) {
+            $(this).datepicker('setDate', null);
+        }
+    });
+    
+    $('#addnew').click(() => {
+        window.location = '/admin/order?id=0';
+    })
+
+    $('.delete').click(function(e) {
+        let item = $(e.target);
+
+        if (confirm('Bạn muốn xóa ' + item.attr('item_name') + '?')) {
+            $('#loading').show();
+            savedata('/be/delete-order.php', {id: item.attr('item_id')}).then((result) => {
+                if (result.status == 'ok') {
+                    item.parents('tr').remove();
+                }
+                else {
+                    alert('Lỗi. Không thể xóa');
+                }
+
+                $('#loading').hide();
+            })
+        }
+    })
+
+    $('#cancel').click(() => {
+        if (confirm('Bạn muốn đóng form và không lưu dữ liệu')) {
+            window.location = '/admin/order';
+        }
+    })
+
+    $('#save').click(async () => {
+        let data = {};
+        
+        $('#formdata').find('input, textarea, select, hidden').each(function(i, e) {
+            dom = $(e);
+            data[dom.attr('name')] = dom.val();
+        });
+
+        data.order_date =  format_date($('[name=order_date]').datepicker('getDate'), 'YY-MM-dd HH:mm:ss');
+
+        $('#loading').show();
+
+        await savedata('/be/save-order.php', data).then(async (result) => {
+            if (result.status == 'ok') {
+                if (result.insert_id != undefined) {
+                    $('#formdata [name=id]').val(result.insert_id);
+                    detail_data.forEach(e => e.order_id = result.insert_id);
+                }
+                await save_detail();
+
+                if (confirm('Bạn muốn trở lại màn hinh danh sách?')) {
+                    window.location.href = '/admin/order';
+                }
+            }
+            else {
+                alert('Lỗi. Không thể lưu dữ liệu');
+            }
+        })
+
+        $('#loading').hide();
+    })
+
+    $('#add-detail').click(() => {
+        $('#select-book').show();
+    })
+
+    $('#select-book #close').click(() => $('#select-book').hide());
+})
+</script>
